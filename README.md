@@ -1,5 +1,5 @@
 # Firebase Studio
-<a href="https://studio.firebase.google.com/import?url=https%3A%2F%2Fgithub.com%2Fanushkaps%2Froomie-vibe.git">
+<a href="https://studio.firebase.google.com/import?url=https%3A%2F%2Fgithub.com%2Fanushkaps%2Fstudio.git">
   <picture>
     <source
       media="(prefers-color-scheme: dark)"

@@ -1,253 +1,164 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
-import { getProfile, saveProfile } from '@/app/actions';
+import { useState, useMemo, useEffect } from 'react';
+import { Heart, X } from 'lucide-react';
+import type { Profile } from '@/lib/types';
 import { currentUser } from '@/lib/data';
-import { ProfilePreferences } from '@/lib/types';
-import { Loader2 } from 'lucide-react';
+import ProfileCard from '@/components/profile-card';
+import { Button } from '@/components/ui/button';
+import MatchModal from '@/components/match-modal';
+import { getCompatibility, getProfiles } from '@/app/actions';
+import type { ProfileCompatibilityOutput } from '@/ai/flows/profile-compatibility-analysis';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const profileFormSchema = z.object({
-  name: z.string().min(2, {
-    message: 'Name must be at least 2 characters.',
-  }),
-  age: z.coerce.number().min(18, {
-    message: 'You must be at least 18 years old.',
-  }),
-  bio: z.string().max(300, {
-    message: 'Bio must not be longer than 300 characters.',
-  }).min(10, {
-    message: 'Bio must be at least 10 characters long.'
-  }),
-  preferences: z.object({
-    cleanliness: z.enum(['Tidy', 'Average', 'Relaxed']),
-    noise: z.enum(['Quiet', 'Some Noise', 'Vibrant']),
-    social: z.enum(['Homebody', 'Occasional Guests', 'Social Butterfly']),
-  }),
-});
+const formatProfileForAI = (profile: Profile): string => {
+  return `Bio: ${profile.bio}. Works at: ${profile.workPlace}. Lifestyle preferences: They consider themselves ${profile.preferences.cleanliness} in terms of cleanliness, prefer a ${profile.preferences.noise} environment, and would be described as a ${profile.preferences.social} when it comes to social habits.`;
+};
 
-type ProfileFormValues = z.infer<typeof profileFormSchema>;
-
-export default function ProfilePage() {
-  const { toast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(true);
-
-  const form = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileFormSchema),
-    defaultValues: {
-      name: '',
-      age: 18,
-      bio: '',
-      preferences: {
-        cleanliness: 'Average',
-        noise: 'Some Noise',
-        social: 'Occasional Guests',
-      },
-    },
-    mode: 'onChange',
-  });
+export default function MatchesPage() {
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
+  const [showMatchModal, setShowMatchModal] = useState(false);
+  const [matchedProfile, setMatchedProfile] = useState<Profile | null>(null);
+  const [compatibilityAnalysis, setCompatibilityAnalysis] = useState<ProfileCompatibilityOutput | null>(null);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
 
   useEffect(() => {
-    async function fetchProfile() {
-      setIsFetching(true);
-      const existingProfile = await getProfile(currentUser.id);
-      if (existingProfile) {
-        form.reset({
-            name: existingProfile.name,
-            age: existingProfile.age,
-            bio: existingProfile.bio,
-            preferences: existingProfile.preferences
-        });
+    const fetchProfiles = async () => {
+      setIsLoadingProfiles(true);
+      const dbProfiles = await getProfiles(currentUser.id);
+      
+      // For demo purposes, we'll randomly make some fetched profiles "like" our mock current user
+      // so that the matching feature can be demonstrated.
+      const profilesWithLikes = dbProfiles.map(p => {
+        if (Math.random() > 0.5) { // 50% chance of liking the user
+          return { ...p, likes: [...(p.likes || []), currentUser.id] };
+        }
+        return p;
+      });
+
+      setProfiles(profilesWithLikes);
+      setIsLoadingProfiles(false);
+    };
+    fetchProfiles();
+  }, []);
+  
+  const currentProfile = useMemo(() => profiles[currentIndex], [profiles, currentIndex]);
+  const nextProfile = useMemo(() => profiles[currentIndex + 1], [profiles, currentIndex]);
+
+  const handleSwipe = async (direction: 'left' | 'right') => {
+    if (!currentProfile) return;
+
+    setSwipeDirection(direction);
+
+    if (direction === 'right') {
+      const likedProfile = currentProfile;
+      // Check for a mutual like
+      if (likedProfile.likes.includes(currentUser.id)) {
+        setShowMatchModal(true);
+        setMatchedProfile(likedProfile);
+        setIsLoadingAnalysis(true);
+        
+        try {
+          const analysis = await getCompatibility({
+            profile1Description: formatProfileForAI(currentUser),
+            profile2Description: formatProfileForAI(likedProfile),
+          });
+          setCompatibilityAnalysis(analysis);
+        } catch (error) {
+          console.error(error);
+          setCompatibilityAnalysis({ compatibilitySuggestions: "Could not generate AI insights at this time." });
+        } finally {
+          setIsLoadingAnalysis(false);
+        }
       }
-      setIsFetching(false);
     }
-    fetchProfile();
-  }, [form]);
+  };
 
-  async function onSubmit(data: ProfileFormValues) {
-    setIsLoading(true);
-    const result = await saveProfile(data, currentUser.id);
-    setIsLoading(false);
-
-    if (result.success) {
-      toast({
-        title: 'Profile Updated!',
-        description: 'Your profile has been saved successfully.',
-      });
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'Uh oh! Something went wrong.',
-        description: result.message,
-      });
+  const handleAnimationEnd = () => {
+    // Only advance to the next card if the match modal isn't about to be shown
+    if (!showMatchModal && matchedProfile === null) {
+      setCurrentIndex((prevIndex) => prevIndex + 1);
+      setSwipeDirection(null);
     }
-  }
+  };
+
+  const closeMatchModal = () => {
+    setShowMatchModal(false);
+    // Use a timeout to allow the modal to animate out before the next card animates in
+    setTimeout(() => {
+      setCurrentIndex((prevIndex) => prevIndex + 1);
+      setSwipeDirection(null);
+      setMatchedProfile(null);
+      setCompatibilityAnalysis(null);
+    }, 300);
+  };
+
+  const isFinished = currentIndex >= profiles.length;
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 flex justify-center">
-      <Card className="w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle>Your Profile</CardTitle>
-          <CardDescription>
-            This information will be displayed to potential roommates.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isFetching ? (
-            <div className="flex justify-center items-center h-40">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    <div className="flex w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8 pt-12">
+      <div className="flex w-full max-w-sm flex-col items-center">
+        <div className="relative h-[550px] w-full flex items-center justify-center">
+          {isLoadingProfiles ? (
+              <Skeleton className="h-full w-full rounded-2xl" />
+          ) : isFinished ? (
+            <div className="text-center">
+              <h2 className="font-headline text-2xl text-muted-foreground">That's everyone for now!</h2>
+              <p className="font-body text-muted-foreground mt-2">Check back later for new potential roomies.</p>
             </div>
           ) : (
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Your name" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="age"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Age</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="Your age" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <FormField
-                  control={form.control}
-                  name="bio"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Bio</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Tell us a little bit about yourself"
-                          className="resize-none"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Share your personality, hobbies, and what you're looking for in a roommate.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+            <>
+              {nextProfile && (
+                 <div className="absolute transition-transform duration-300 ease-in-out transform scale-95 top-0 w-full h-full">
+                   <ProfileCard profile={nextProfile} />
+                 </div>
+              )}
+              {currentProfile && (
+                <ProfileCard
+                  profile={currentProfile}
+                  swipeDirection={swipeDirection}
+                  onAnimationEnd={handleAnimationEnd}
                 />
-                
-                <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Lifestyle Preferences</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                        <FormField
-                            control={form.control}
-                            name="preferences.cleanliness"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Cleanliness</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select your neatness level" />
-                                    </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                    {ProfilePreferences.cleanliness.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="preferences.noise"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Noise Level</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select your noise preference" />
-                                    </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                    {ProfilePreferences.noise.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="preferences.social"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Social Habits</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select your social style" />
-                                    </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                    {ProfilePreferences.social.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-                </div>
-
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Profile
-                </Button>
-              </form>
-            </Form>
+              )}
+            </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+
+        {!isFinished && !isLoadingProfiles && (
+          <div className="flex items-center justify-center gap-8 mt-6">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-20 w-20 rounded-full border-2 border-destructive/50 bg-white text-destructive shadow-lg hover:bg-destructive/10"
+              onClick={() => handleSwipe('left')}
+              aria-label="Dislike"
+            >
+              <X className="h-10 w-10" />
+            </Button>
+            <Button
+              size="icon"
+              className="h-20 w-20 rounded-full bg-accent text-accent-foreground shadow-lg hover:bg-accent/90"
+              onClick={() => handleSwipe('right')}
+              aria-label="Like"
+            >
+              <Heart className="h-10 w-10 fill-current" />
+            </Button>
+          </div>
+        )}
+      </div>
+      {matchedProfile && (
+        <MatchModal
+          isOpen={showMatchModal}
+          onClose={closeMatchModal}
+          currentUser={currentUser}
+          matchedUser={matchedProfile}
+          analysis={compatibilityAnalysis}
+          isLoading={isLoadingAnalysis}
+        />
+      )}
     </div>
   );
 }

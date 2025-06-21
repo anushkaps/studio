@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import type { Profile } from '@/lib/types';
 import { BroomIcon, SpeakerIcon, UsersIcon } from './icons';
 import { Badge } from './ui/badge';
+import { Briefcase } from 'lucide-react';
 
 interface ProfileCardProps {
   profile: Profile;
@@ -43,6 +44,12 @@ export default function ProfileCard({ profile, swipeDirection, onAnimationEnd }:
           <h2 className="font-headline text-3xl font-bold">
             {profile.name}, <span className="font-light">{profile.age}</span>
           </h2>
+          {profile.workPlace && (
+            <div className="flex items-center gap-2 mt-1 font-body text-base">
+                <Briefcase className="h-4 w-4" />
+                <span>{profile.workPlace}</span>
+            </div>
+          )}
           <p className="font-body text-base mt-2 leading-relaxed">{profile.bio}</p>
           <div className="flex flex-wrap gap-2 mt-4">
             {profile.preferences && Object.entries(profile.preferences).map(([key, value]) => {

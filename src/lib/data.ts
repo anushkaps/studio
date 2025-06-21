@@ -6,6 +6,7 @@ export const currentUser: Profile = {
   age: 25,
   photos: ['https://placehold.co/600x800'],
   bio: 'Young professional looking for a quiet and clean place to live. I enjoy hiking on the weekends and trying new coffee shops. I work from home most days.',
+  workPlace: 'RoomieVibe Inc.',
   preferences: {
     cleanliness: 'Tidy',
     noise: 'Quiet',

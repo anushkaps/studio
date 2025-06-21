@@ -1,7 +1,5 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Home } from 'lucide-react';
-import { Users } from 'lucide-react';
 
 export function Header() {
   return (
@@ -12,14 +10,8 @@ export function Header() {
         </div>
       </Link>
       <nav className="flex items-center gap-2">
-        <Button asChild variant="ghost" className="flex items-center gap-2">
-          <Link href="/profile">
-            <Users className="h-4 w-4" />
-            <span>My Profile</span>
-          </Link>
-        </Button>
         <Button asChild>
-          <Link href="/">Find Matches</Link>
+          <Link href="/profile">Find Matches</Link>
         </Button>
       </nav>
     </header>

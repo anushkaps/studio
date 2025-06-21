@@ -4,6 +4,7 @@ export type Profile = {
   age: number;
   photos: string[];
   bio: string;
+  workPlace: string;
   preferences: {
     cleanliness: 'Tidy' | 'Average' | 'Relaxed';
     noise: 'Quiet' | 'Some Noise' | 'Vibrant';

@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
-import type { Profile } from '@/lib/data';
+import type { Profile } from '@/lib/types';
 import { BroomIcon, SpeakerIcon, UsersIcon } from './icons';
 import { Badge } from './ui/badge';
 
@@ -45,7 +45,7 @@ export default function ProfileCard({ profile, swipeDirection, onAnimationEnd }:
           </h2>
           <p className="font-body text-base mt-2 leading-relaxed">{profile.bio}</p>
           <div className="flex flex-wrap gap-2 mt-4">
-            {Object.entries(profile.preferences).map(([key, value]) => {
+            {profile.preferences && Object.entries(profile.preferences).map(([key, value]) => {
               const Icon = preferenceIcons[key as keyof typeof preferenceIcons];
               return (
                 <Badge key={key} variant="outline" className="bg-white/20 border-none text-white backdrop-blur-sm">

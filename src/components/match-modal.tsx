@@ -5,7 +5,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { Profile } from '@/lib/data';
+import type { Profile } from '@/lib/types';
 import type { ProfileCompatibilityOutput } from '@/ai/flows/profile-compatibility-analysis';
 import { SparklesIcon } from './icons';
 

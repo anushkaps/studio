@@ -1,26 +1,49 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Heart, X } from 'lucide-react';
-import { currentUser, potentialProfiles, type Profile } from '@/lib/data';
+import type { Profile } from '@/lib/types';
+import { currentUser } from '@/lib/data';
 import ProfileCard from '@/components/profile-card';
 import { Button } from '@/components/ui/button';
 import MatchModal from '@/components/match-modal';
-import { getCompatibility } from '@/app/actions';
+import { getCompatibility, getProfiles } from '@/app/actions';
 import type { ProfileCompatibilityOutput } from '@/ai/flows/profile-compatibility-analysis';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const formatProfileForAI = (profile: Profile): string => {
   return `Bio: ${profile.bio}. Lifestyle preferences: They consider themselves ${profile.preferences.cleanliness} in terms of cleanliness, prefer a ${profile.preferences.noise} environment, and would be described as a ${profile.preferences.social} when it comes to social habits.`;
 };
 
 export default function Home() {
-  const [profiles, setProfiles] = useState(potentialProfiles);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [matchedProfile, setMatchedProfile] = useState<Profile | null>(null);
   const [compatibilityAnalysis, setCompatibilityAnalysis] = useState<ProfileCompatibilityOutput | null>(null);
   const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
+
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      setIsLoadingProfiles(true);
+      const dbProfiles = await getProfiles(currentUser.id);
+      
+      // For demo purposes, we'll randomly make some fetched profiles "like" our mock current user
+      // so that the matching feature can be demonstrated.
+      const profilesWithLikes = dbProfiles.map(p => {
+        if (Math.random() > 0.5) { // 50% chance of liking the user
+          return { ...p, likes: [...(p.likes || []), currentUser.id] };
+        }
+        return p;
+      });
+
+      setProfiles(profilesWithLikes);
+      setIsLoadingProfiles(false);
+    };
+    fetchProfiles();
+  }, []);
   
   const currentProfile = useMemo(() => profiles[currentIndex], [profiles, currentIndex]);
   const nextProfile = useMemo(() => profiles[currentIndex + 1], [profiles, currentIndex]);
@@ -32,7 +55,7 @@ export default function Home() {
 
     if (direction === 'right') {
       const likedProfile = currentProfile;
-      // Simulate checking for a mutual like
+      // Check for a mutual like
       if (likedProfile.likes.includes(currentUser.id)) {
         setShowMatchModal(true);
         setMatchedProfile(likedProfile);
@@ -76,12 +99,12 @@ export default function Home() {
   const isFinished = currentIndex >= profiles.length;
 
   return (
-    <main className="flex min-h-screen w-full flex-col items-center justify-center bg-background p-4 sm:p-6 md:p-8">
+    <div className="flex w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8 pt-12">
       <div className="flex w-full max-w-sm flex-col items-center">
-        <h1 className="font-headline text-4xl text-primary mb-6">RoomieVibe</h1>
-
         <div className="relative h-[550px] w-full flex items-center justify-center">
-          {isFinished ? (
+          {isLoadingProfiles ? (
+              <Skeleton className="h-full w-full rounded-2xl" />
+          ) : isFinished ? (
             <div className="text-center">
               <h2 className="font-headline text-2xl text-muted-foreground">That's everyone for now!</h2>
               <p className="font-body text-muted-foreground mt-2">Check back later for new potential roomies.</p>
@@ -104,7 +127,7 @@ export default function Home() {
           )}
         </div>
 
-        {!isFinished && (
+        {!isFinished && !isLoadingProfiles && (
           <div className="flex items-center justify-center gap-8 mt-6">
             <Button
               variant="outline"
@@ -136,6 +159,6 @@ export default function Home() {
           isLoading={isLoadingAnalysis}
         />
       )}
-    </main>
+    </div>
   );
 }
